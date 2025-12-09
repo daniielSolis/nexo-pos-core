@@ -1,7 +1,8 @@
 import sqlite3
 import os
+import datetime
 
-# --- CONFIGURACIÓN DE RUTA 
+# --- CONFIGURACIÓN DE RUTA ---
 CARPETA_DATA = os.path.dirname(os.path.abspath(__file__))
 CARPETA_RAIZ = os.path.dirname(CARPETA_DATA)
 RUTA_DB = os.path.join(CARPETA_RAIZ, "nexo.db")
@@ -18,6 +19,7 @@ def inicializar_tablas():
     conn = crear_conexion()
     if conn:
         cursor = conn.cursor()
+        
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,8 +38,26 @@ def inicializar_tablas():
                 stock INTEGER DEFAULT 0
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ventas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                total REAL NOT NULL,
+                usuario_nombre TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_ventas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_venta INTEGER,
+                producto_nombre TEXT,
+                cantidad INTEGER,
+                precio_unitario REAL,
+                subtotal REAL,
+                FOREIGN KEY(id_venta) REFERENCES ventas(id)
+            )
+        """)
         
-        # Admin por defecto
         cursor.execute("SELECT * FROM usuarios WHERE usuario='admin'")
         if not cursor.fetchone():
             cursor.execute("INSERT INTO usuarios (usuario, password, nombre, rol) VALUES (?, ?, ?, ?)",
@@ -46,10 +66,9 @@ def inicializar_tablas():
         conn.commit()
         conn.close()
 
-# --- FUNCIONES PARA EL INVENTARIO 
+# --- FUNCIONES DEL SISTEMA ---
 
 def registrar_producto(codigo, nombre, precio, stock):
-    """Guarda un producto nuevo en la base de datos"""
     conn = crear_conexion()
     if conn:
         try:
@@ -58,15 +77,13 @@ def registrar_producto(codigo, nombre, precio, stock):
                            (codigo, nombre, precio, stock))
             conn.commit()
             conn.close()
-            return True # ¡Se guardó bien!
+            return True
         except sqlite3.IntegrityError:
-            return False # Error: El código ya existe
+            return False
         except Exception as e:
-            print(f"Error: {e}")
             return False
 
 def obtener_productos():
-    """Devuelve la lista completa de productos"""
     conn = crear_conexion()
     lista = []
     if conn:
@@ -75,6 +92,52 @@ def obtener_productos():
         lista = cursor.fetchall()
         conn.close()
     return lista
+
+# --- MEJORA AQUÍ: BÚSQUEDA HÍBRIDA ---
+def buscar_producto(criterio):
+    """Busca por código exacto O por nombre parecido"""
+    conn = crear_conexion()
+    producto = None
+    if conn:
+        cursor = conn.cursor()
+        
+        # 1. Intentamos buscar por CÓDIGO exacto
+        cursor.execute("SELECT codigo, nombre, precio, stock FROM productos WHERE codigo = ?", (criterio,))
+        producto = cursor.fetchone()
+        
+        # 2. Si no existe ese código, buscamos por NOMBRE (que contenga el texto)
+        if not producto:
+            cursor.execute("SELECT codigo, nombre, precio, stock FROM productos WHERE nombre LIKE ?", (f"%{criterio}%",))
+            producto = cursor.fetchone() # Trae el primer resultado que coincida
+            
+        conn.close()
+    return producto
+
+def realizar_venta(lista_carrito, total, usuario_nombre):
+    conn = crear_conexion()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO ventas (total, usuario_nombre) VALUES (?, ?)", (total, usuario_nombre))
+            id_venta = cursor.lastrowid
+            
+            for item in lista_carrito:
+                subtotal = item['precio'] * item['cantidad']
+                cursor.execute("""
+                    INSERT INTO detalle_ventas (id_venta, producto_nombre, cantidad, precio_unitario, subtotal)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (id_venta, item['nombre'], item['cantidad'], item['precio'], subtotal))
+
+                cursor.execute("UPDATE productos SET stock = stock - ? WHERE codigo = ?", 
+                               (item['cantidad'], item['codigo']))
+
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error en venta: {e}")
+            conn.rollback()
+            return False
 
 if __name__ == "__main__":
     inicializar_tablas()
