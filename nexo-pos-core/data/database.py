@@ -1,31 +1,23 @@
 import sqlite3
 import os
-#configuracion de ruta 
-#identifica donde esta el archivo (dentro de la carpeta data)
-CARPETA_ACTUAL = os.path.dirname(os.path.abspath(__file__))
-#subimos un nivel para llegar a la carpeta principal del proyecto
-CARPETA_PROYECTO = os.path.dirname(CARPETA_ACTUAL) 
-#guardamos la base de datos en la carpeta principal, no en data
-RUTA_DB = os.path.join(CARPETA_PROYECTO, "nexo.db")
+
+# --- CONFIGURACIÓN DE RUTA 
+CARPETA_DATA = os.path.dirname(os.path.abspath(__file__))
+CARPETA_RAIZ = os.path.dirname(CARPETA_DATA)
+RUTA_DB = os.path.join(CARPETA_RAIZ, "nexo.db")
 
 def crear_conexion():
-    """Conecta con la memoria del sistema (SQLite)"""
     try:
         conn = sqlite3.connect(RUTA_DB)
         return conn
     except Exception as e:
-        print(f"❌ Error crítico en base de datos: {e}")
+        print(f"❌ Error BD: {e}")
         return None
 
 def inicializar_tablas():
-    """Construye las tablas si es la primera vez que se usa"""
-    print(f"🔄 Conectando a base de datos en: {RUTA_DB}")
-    
     conn = crear_conexion()
     if conn:
         cursor = conn.cursor()
-
-        # 1. TABLA DE USUARIOS (Para iniciar sesión)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,8 +27,6 @@ def inicializar_tablas():
                 rol TEXT DEFAULT 'cajero'
             )
         """)
-
-        # 2. TABLA DE PRODUCTOS (Tu inventario)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS productos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,18 +36,45 @@ def inicializar_tablas():
                 stock INTEGER DEFAULT 0
             )
         """)
-
-        # 3. CREAR EL PRIMER JEFE (ADMIN)
+        
+        # Admin por defecto
         cursor.execute("SELECT * FROM usuarios WHERE usuario='admin'")
         if not cursor.fetchone():
             cursor.execute("INSERT INTO usuarios (usuario, password, nombre, rol) VALUES (?, ?, ?, ?)",
                            ("admin", "1234", "Administrador Principal", "admin"))
-            print("👤 Usuario 'admin' creado por defecto (Clave: 1234)")
-
+            
         conn.commit()
         conn.close()
-        print("✅ ¡Base de datos inicializada y lista para trabajar!")
 
-# Este bloque permite probar el archivo directamente
+# --- FUNCIONES PARA EL INVENTARIO 
+
+def registrar_producto(codigo, nombre, precio, stock):
+    """Guarda un producto nuevo en la base de datos"""
+    conn = crear_conexion()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO productos (codigo, nombre, precio, stock) VALUES (?, ?, ?, ?)",
+                           (codigo, nombre, precio, stock))
+            conn.commit()
+            conn.close()
+            return True # ¡Se guardó bien!
+        except sqlite3.IntegrityError:
+            return False # Error: El código ya existe
+        except Exception as e:
+            print(f"Error: {e}")
+            return False
+
+def obtener_productos():
+    """Devuelve la lista completa de productos"""
+    conn = crear_conexion()
+    lista = []
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT codigo, nombre, precio, stock FROM productos")
+        lista = cursor.fetchall()
+        conn.close()
+    return lista
+
 if __name__ == "__main__":
     inicializar_tablas()
