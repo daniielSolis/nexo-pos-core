@@ -19,7 +19,6 @@ def inicializar_tablas():
     if conn:
         cursor = conn.cursor()
         
-        # Tablas
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,7 +57,6 @@ def inicializar_tablas():
             )
         """)
         
-        # Admin por defecto
         cursor.execute("SELECT * FROM usuarios WHERE usuario='admin'")
         if not cursor.fetchone():
             cursor.execute("INSERT INTO usuarios (usuario, password, nombre, rol) VALUES (?, ?, ?, ?)",
@@ -112,19 +110,25 @@ def buscar_producto(criterio):
         conn.close()
     return producto
 
-# --- FUNCIONES DE GESTIÓN DE INVENTARIO ---
+# --- FUNCIONES DE GESTIÓN (CRUD) ---
 
 def sumar_stock(codigo, cantidad_extra):
-    """
-    Suma stock ignorando negativos previos.
-    Ejemplo: Si hay -4 y agregas 5, el resultado será 5 (no 1).
-    """
     conn = crear_conexion()
     if conn:
         try:
             cursor = conn.cursor()
-            #(0, stock) convierte cualquier número negativo en 0 antes de sumar
             cursor.execute("UPDATE productos SET stock = MAX(0, stock) + ? WHERE codigo = ?", (cantidad_extra, codigo))
+            conn.commit(); conn.close()
+            return True
+        except: return False
+
+def editar_producto(codigo, nuevo_nombre, nuevo_precio):
+    """Actualiza nombre y precio de un producto existente"""
+    conn = crear_conexion()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE productos SET nombre = ?, precio = ? WHERE codigo = ?", (nuevo_nombre, nuevo_precio, codigo))
             conn.commit(); conn.close()
             return True
         except: return False

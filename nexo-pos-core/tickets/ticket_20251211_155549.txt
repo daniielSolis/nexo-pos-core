@@ -1,0 +1,17 @@
+================================
+          NEXO POS
+     Tu Tienda de Confianza
+================================
+Fecha: 11/12/2025 15:55:49
+Le atendió: Administrador Principal
+================================
+CANT  PRODUCTO          TOTAL
+--------------------------------
+1 x papas           $18.50
+1 x CocaCola 600ml  $18.00
+2 x Galletas        $40.00
+--------------------------------
+TOTAL A PAGAR:      $76.50
+================================
+    ¡GRACIAS POR SU COMPRA!
+================================
