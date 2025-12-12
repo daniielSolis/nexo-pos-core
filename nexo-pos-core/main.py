@@ -16,7 +16,7 @@ def main(page: ft.Page):
 
     carrito_compras = []
 
-    # --- FUNCIÓN: GENERAR TICKET (Impresora Virtual)  ---
+    # --- FUNCIÓN: GENERAR TICKET (Impresora Virtual) ---
     def generar_ticket(items, total, vendedor):
         if not os.path.exists("tickets"):
             os.makedirs("tickets")
@@ -37,7 +37,6 @@ def main(page: ft.Page):
 
         for item in items:
             subtotal = item['precio'] * item['cantidad']
-            # Formato: 2 x CocaCola... $30.00
             texto += f"{item['cantidad']} x {item['nombre'][:15]:<15} ${subtotal:.2f}\n"
 
         texto += "-"*32 + "\n"
@@ -45,7 +44,6 @@ def main(page: ft.Page):
         texto += linea
         texto += "    ¡GRACIAS POR SU COMPRA!\n"
         texto += linea
-        # --- FIRMA PROFESIONAL DE NEXO ---
         texto += "\n"
         texto += "      Sistema Punto de Venta\n"
         texto += "           *** NEXO ***\n"
@@ -81,14 +79,14 @@ def main(page: ft.Page):
             actions_alignment="center"
         )
         
-        # --- NUEVO: CATÁLOGO RÁPIDO (Pop-up) ---
+        # --- CATÁLOGO RÁPIDO (Pop-up) ---
         tabla_catalogo = ft.DataTable(
             columns=[
                 ft.DataColumn(ft.Text("Cód")),
                 ft.DataColumn(ft.Text("Nombre")),
                 ft.DataColumn(ft.Text("Precio")),
                 ft.DataColumn(ft.Text("Stock")),
-                ft.DataColumn(ft.Text("+")), # Botón para agregar directo
+                ft.DataColumn(ft.Text("+")), 
             ],
             rows=[]
         )
@@ -101,7 +99,7 @@ def main(page: ft.Page):
             title=ft.Text("Catálogo de Productos 📖"),
             content=ft.Column([
                 ft.Text("Selecciona para agregar al carrito:", size=12, color="grey"),
-                ft.Container(content=tabla_catalogo, height=300, padding=10) # Scrollable
+                ft.Container(content=tabla_catalogo, height=300, padding=10) 
             ], height=350, width=600, scroll="auto"),
             actions=[ft.TextButton("Cerrar", on_click=cerrar_catalogo)]
         )
@@ -175,7 +173,6 @@ def main(page: ft.Page):
             del carrito_compras[indice]
             actualizar_tabla()
 
-        # Función modificada para aceptar un código directo (desde el catálogo)
         def procesar_producto(codigo_input):
             if not codigo_input: return
 
@@ -183,9 +180,15 @@ def main(page: ft.Page):
             
             if producto_db:
                 stock_real = producto_db[3]
+                
+                # --- AQUÍ ESTÁ EL CAMBIO ---
                 if stock_real <= 0:
-                    lanzar_alerta(f"El producto '{producto_db[1]}' está AGOTADO.")
+                    # Si no hay stock, simplemente limpiamos y nos salimos en silencio.
+                    # NO lanzamos alerta.
+                    txt_codigo.value = ""
+                    page.update()
                     return
+                # ---------------------------
 
                 encontrado = False
                 for item in carrito_compras:
@@ -216,25 +219,22 @@ def main(page: ft.Page):
         def agregar_desde_input(e):
             procesar_producto(txt_codigo.value)
 
-        # Lógica del Catálogo Rápido
         def abrir_catalogo(e):
-            productos = obtener_productos() # Traemos todo de la BD
+            productos = obtener_productos()
             tabla_catalogo.rows.clear()
             
             for p in productos:
-                # p = (codigo, nombre, precio, stock)
-                # Botón de "Agregar rápido"
                 btn_add = ft.IconButton(
                     icon="add_shopping_cart", 
                     icon_color="green", 
                     tooltip="Agregar al Ticket",
-                    on_click=lambda e, cod=p[0]: [procesar_producto(cod), cerrar_catalogo(None)] # Agrega y cierra
+                    on_click=lambda e, cod=p[0]: [procesar_producto(cod), cerrar_catalogo(None)] 
                 )
 
                 tabla_catalogo.rows.append(
                     ft.DataRow(cells=[
-                        ft.DataCell(ft.Text(p[0])), # Cód
-                        ft.DataCell(ft.Text(p[1])), # Nombre
+                        ft.DataCell(ft.Text(p[0])), 
+                        ft.DataCell(ft.Text(p[1])), 
                         ft.DataCell(ft.Text(f"${p[2]}")),
                         ft.DataCell(ft.Text(str(p[3]))),
                         ft.DataCell(btn_add)
@@ -266,7 +266,6 @@ def main(page: ft.Page):
             prefix_icon="search"
         )
         
-        # Botón para abrir el catálogo
         btn_catalogo = ft.ElevatedButton(
             "Ver Productos",
             icon="list",
@@ -286,7 +285,6 @@ def main(page: ft.Page):
             on_click=finalizar_venta
         )
 
-        # Layout
         header = ft.Row([ft.IconButton(icon="arrow_back", on_click=lambda _: mostrar_dashboard(usuario_nombre)), ft.Text("Punto de Venta", size=30, weight="bold")], alignment="start")
         
         panel_total = ft.Container(
@@ -297,7 +295,6 @@ def main(page: ft.Page):
         page.add(
             header, 
             ft.Divider(),
-            # Fila de búsqueda + Botón Catálogo + Total
             ft.Row([
                 ft.Row([txt_codigo, btn_catalogo]), 
                 panel_total
@@ -415,7 +412,7 @@ def main(page: ft.Page):
         page.add(header, ft.Divider(height=50, color="transparent"), contenedor_botones)
 
     # ---------------------------------------------------------
-    # PANTALLA 1: LOGIN
+    # PANTALLA 1: LOGIN 
     # ---------------------------------------------------------
     def mostrar_login():
         page.clean(); page.vertical_alignment = "center"; page.horizontal_alignment = "center"
