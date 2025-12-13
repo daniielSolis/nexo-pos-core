@@ -125,6 +125,27 @@ def main(page: ft.Page):
             rows=[]
         )
 
+        #  Funciones ahora usan e.control.data
+        def sumar_cantidad(e):
+            indice = e.control.data
+            item = carrito_compras[indice]
+            if item['cantidad'] < item['stock_max']:
+                item['cantidad'] += 1
+                actualizar_tabla()
+            else:
+                lanzar_alerta(f"Límite de stock alcanzado ({item['stock_max']} disponibles).")
+
+        def restar_cantidad(e):
+            indice = e.control.data
+            if carrito_compras[indice]['cantidad'] > 1:
+                carrito_compras[indice]['cantidad'] -= 1
+            actualizar_tabla()
+
+        def eliminar_item(e):
+            indice = e.control.data
+            del carrito_compras[indice]
+            actualizar_tabla()
+
         def actualizar_tabla():
             tabla_ventas.rows.clear()
             total_general = 0
@@ -133,11 +154,33 @@ def main(page: ft.Page):
                 subtotal = item['precio'] * item['cantidad']
                 total_general += subtotal
                 
+                #  Usar .data en lugar de lambda con índice capturado
+                btn_restar = ft.IconButton(
+                    icon="remove_circle_outline", 
+                    icon_color="red", 
+                    data=i,
+                    on_click=restar_cantidad
+                )
+                
+                btn_sumar = ft.IconButton(
+                    icon="add_circle_outline", 
+                    icon_color="green", 
+                    data=i,
+                    on_click=sumar_cantidad
+                )
+                
+                btn_eliminar = ft.IconButton(
+                    icon="delete", 
+                    icon_color="grey", 
+                    data=i,
+                    on_click=eliminar_item
+                )
+                
                 celda_cantidad = ft.Row(
                     [
-                        ft.IconButton(icon="remove_circle_outline", icon_color="red", on_click=lambda e, x=i: restar_cantidad(x)),
+                        btn_restar,
                         ft.Text(str(item['cantidad']), weight="bold", size=16),
-                        ft.IconButton(icon="add_circle_outline", icon_color="green", on_click=lambda e, x=i: sumar_cantidad(x)),
+                        btn_sumar,
                     ],
                     alignment="center"
                 )
@@ -148,7 +191,7 @@ def main(page: ft.Page):
                         ft.DataCell(ft.Text(f"${item['precio']}")),
                         ft.DataCell(celda_cantidad),
                         ft.DataCell(ft.Text(f"${subtotal:.2f}")),
-                        ft.DataCell(ft.IconButton(icon="delete", icon_color="grey", on_click=lambda e, x=i: eliminar_item(x)))
+                        ft.DataCell(btn_eliminar)
                     ])
                 )
             
@@ -156,39 +199,20 @@ def main(page: ft.Page):
             txt_codigo.focus()
             page.update()
 
-        def sumar_cantidad(indice):
-            item = carrito_compras[indice]
-            if item['cantidad'] < item['stock_max']:
-                item['cantidad'] += 1
-                actualizar_tabla()
-            else:
-                lanzar_alerta(f"Límite de stock alcanzado ({item['stock_max']} disponibles).")
-
-        def restar_cantidad(indice):
-            if carrito_compras[indice]['cantidad'] > 1:
-                carrito_compras[indice]['cantidad'] -= 1
-            actualizar_tabla()
-
-        def eliminar_item(indice):
-            del carrito_compras[indice]
-            actualizar_tabla()
-
         def procesar_producto(codigo_input):
-            if not codigo_input: return
+            if not codigo_input: 
+                return
 
             producto_db = buscar_producto(codigo_input)
             
             if producto_db:
                 stock_real = producto_db[3]
                 
-                # --- AQUÍ ESTÁ EL CAMBIO ---
+                #  UX discreta cuando no hay stock
                 if stock_real <= 0:
-                    # Si no hay stock, simplemente limpiamos y nos salimos en silencio.
-                    # NO lanzamos alerta.
                     txt_codigo.value = ""
                     page.update()
                     return
-                # ---------------------------
 
                 encontrado = False
                 for item in carrito_compras:
@@ -213,7 +237,11 @@ def main(page: ft.Page):
                 txt_codigo.value = ""
                 actualizar_tabla()
             else:
-                page.snack_bar = ft.SnackBar(ft.Text("❌ Producto no encontrado"), bgcolor="orange", open=True)
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("❌ Producto no encontrado"), 
+                    bgcolor="orange", 
+                    open=True
+                )
                 page.update()
 
         def agregar_desde_input(e):
@@ -224,17 +252,19 @@ def main(page: ft.Page):
             tabla_catalogo.rows.clear()
             
             for p in productos:
+                # ✅ REFACTORIZADO: Usar .data para el código
                 btn_add = ft.IconButton(
                     icon="add_shopping_cart", 
                     icon_color="green", 
                     tooltip="Agregar al Ticket",
-                    on_click=lambda e, cod=p[0]: [procesar_producto(cod), cerrar_catalogo(None)] 
+                    data=p[0],
+                    on_click=lambda e: [procesar_producto(e.control.data), cerrar_catalogo(None)]
                 )
 
                 tabla_catalogo.rows.append(
                     ft.DataRow(cells=[
-                        ft.DataCell(ft.Text(p[0])), 
-                        ft.DataCell(ft.Text(p[1])), 
+                        ft.DataCell(ft.Text(str(p[0]))),  #  str() explícito
+                        ft.DataCell(ft.Text(str(p[1]))), 
                         ft.DataCell(ft.Text(f"${p[2]}")),
                         ft.DataCell(ft.Text(str(p[3]))),
                         ft.DataCell(btn_add)
@@ -245,16 +275,26 @@ def main(page: ft.Page):
             page.update()
 
         def finalizar_venta(e):
-            if not carrito_compras: return
+            if not carrito_compras: 
+                return
+                
             total_final = sum(item['precio'] * item['cantidad'] for item in carrito_compras)
             
             if realizar_venta(carrito_compras, total_final, usuario_nombre):
                 generar_ticket(carrito_compras, total_final, usuario_nombre)
-                page.snack_bar = ft.SnackBar(ft.Text(f"✅ Venta registrada: ${total_final}"), bgcolor="green", open=True)
+                page.snack_bar = ft.SnackBar(
+                    ft.Text(f"✅ Venta registrada: ${total_final}"), 
+                    bgcolor="green", 
+                    open=True
+                )
                 carrito_compras.clear()
                 actualizar_tabla()
             else:
-                page.snack_bar = ft.SnackBar(ft.Text("❌ Error al guardar venta"), bgcolor="red", open=True)
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("❌ Error al guardar venta"), 
+                    bgcolor="red", 
+                    open=True
+                )
             page.update()
 
         txt_codigo = ft.TextField(
@@ -285,11 +325,19 @@ def main(page: ft.Page):
             on_click=finalizar_venta
         )
 
-        header = ft.Row([ft.IconButton(icon="arrow_back", on_click=lambda _: mostrar_dashboard(usuario_nombre)), ft.Text("Punto de Venta", size=30, weight="bold")], alignment="start")
+        header = ft.Row([
+            ft.IconButton(icon="arrow_back", on_click=lambda _: mostrar_dashboard(usuario_nombre)), 
+            ft.Text("Punto de Venta", size=30, weight="bold")
+        ], alignment="start")
         
         panel_total = ft.Container(
-            content=ft.Column([ft.Text("Total a Pagar:", size=16), txt_total], alignment="center", horizontal_alignment="end"),
-            padding=10, border=ft.border.all(1, "green"), border_radius=10
+            content=ft.Column([
+                ft.Text("Total a Pagar:", size=16), 
+                txt_total
+            ], alignment="center", horizontal_alignment="end"),
+            padding=10, 
+            border=ft.border.all(1, "green"), 
+            border_radius=10
         )
 
         page.add(
@@ -327,107 +375,497 @@ def main(page: ft.Page):
             page.update()
 
         def confirmar_stock(e):
+            #  VALIDACIÓN AGREGADA
+            try:
+                cantidad = int(input_cant_stock.value or 0)
+                if cantidad <= 0:
+                    raise ValueError("Cantidad debe ser mayor a 0")
+            except ValueError:
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("⚠️ Ingresa una cantidad válida"), 
+                    bgcolor="orange", 
+                    open=True
+                )
+                page.update()
+                return
+            
             if validar_admin(input_pass_stock.value):
-                sumar_stock(codigo_seleccionado[0], int(input_cant_stock.value or 0))
-                page.snack_bar = ft.SnackBar(ft.Text("✅ Stock Actualizado"), bgcolor="green", open=True); cerrar_dialogos(None); cargar()
-            else: page.snack_bar = ft.SnackBar(ft.Text("❌ Contraseña Incorrecta"), bgcolor="red", open=True); page.update()
+                sumar_stock(codigo_seleccionado[0], cantidad)
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("✅ Stock Actualizado"), 
+                    bgcolor="green", 
+                    open=True
+                )
+                cerrar_dialogos(None)
+                cargar()
+            else:
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("❌ Contraseña Incorrecta"), 
+                    bgcolor="red", 
+                    open=True
+                )
+                page.update()
 
         def confirmar_eliminar(e):
             if validar_admin(input_pass_eliminar.value):
                 eliminar_producto(codigo_seleccionado[0])
-                page.snack_bar = ft.SnackBar(ft.Text("🗑️ Producto Eliminado"), bgcolor="green", open=True); cerrar_dialogos(None); cargar()
-            else: page.snack_bar = ft.SnackBar(ft.Text("❌ Contraseña Incorrecta"), bgcolor="red", open=True); page.update()
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("🗑️ Producto Eliminado"), 
+                    bgcolor="green", 
+                    open=True
+                )
+                cerrar_dialogos(None)
+                cargar()
+            else:
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("❌ Contraseña Incorrecta"), 
+                    bgcolor="red", 
+                    open=True
+                )
+                page.update()
 
         def confirmar_edicion(e):
+            # VALIDACIÓN AGREGADA
+            if not input_edit_nombre.value.strip():
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("⚠️ El nombre no puede estar vacío"), 
+                    bgcolor="orange", 
+                    open=True
+                )
+                page.update()
+                return
+            
+            try:
+                precio = float(input_edit_precio.value or 0)
+                if precio < 0:
+                    raise ValueError("Precio no puede ser negativo")
+            except ValueError:
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("⚠️ Ingresa un precio válido"), 
+                    bgcolor="orange", 
+                    open=True
+                )
+                page.update()
+                return
+            
             if validar_admin(input_pass_edit.value):
-                if editar_producto(codigo_seleccionado[0], input_edit_nombre.value, float(input_edit_precio.value or 0)):
-                    page.snack_bar = ft.SnackBar(ft.Text("✅ Producto Editado"), bgcolor="green", open=True); cerrar_dialogos(None); cargar()
-                else: page.snack_bar = ft.SnackBar(ft.Text("⚠️ Error al editar"), bgcolor="orange", open=True); page.update()
-            else: page.snack_bar = ft.SnackBar(ft.Text("❌ Contraseña Incorrecta"), bgcolor="red", open=True); page.update()
+                if editar_producto(codigo_seleccionado[0], input_edit_nombre.value.strip(), precio):
+                    page.snack_bar = ft.SnackBar(
+                        ft.Text("✅ Producto Editado"), 
+                        bgcolor="green", 
+                        open=True
+                    )
+                    cerrar_dialogos(None)
+                    cargar()
+                else:
+                    page.snack_bar = ft.SnackBar(
+                        ft.Text("⚠️ Error al editar"), 
+                        bgcolor="orange", 
+                        open=True
+                    )
+                    page.update()
+            else:
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("❌ Contraseña Incorrecta"), 
+                    bgcolor="red", 
+                    open=True
+                )
+                page.update()
 
-        dialogo_stock = ft.AlertDialog(title=ft.Text("Rellenar Stock"), content=ft.Column([input_cant_stock, input_pass_stock], height=150), actions=[ft.ElevatedButton("CONFIRMAR", bgcolor="blue", color="white", on_click=confirmar_stock)])
-        dialogo_eliminar = ft.AlertDialog(title=ft.Text("⚠️ Eliminar Producto"), content=ft.Column([ft.Text("¿Seguro que deseas eliminarlo?"), input_pass_eliminar], height=100), actions=[ft.ElevatedButton("ELIMINAR", bgcolor="red", color="white", on_click=confirmar_eliminar)])
-        dialogo_editar = ft.AlertDialog(title=ft.Text("Editar Producto ✏️"), content=ft.Column([input_edit_nombre, input_edit_precio, input_pass_edit], height=220), actions=[ft.ElevatedButton("GUARDAR CAMBIOS", bgcolor="green", color="white", on_click=confirmar_edicion)])
+        dialogo_stock = ft.AlertDialog(
+            title=ft.Text("Rellenar Stock"), 
+            content=ft.Column([input_cant_stock, input_pass_stock], height=150), 
+            actions=[ft.ElevatedButton("CONFIRMAR", bgcolor="blue", color="white", on_click=confirmar_stock)]
+        )
+        
+        dialogo_eliminar = ft.AlertDialog(
+            title=ft.Text("⚠️ Eliminar Producto"), 
+            content=ft.Column([ft.Text("¿Seguro que deseas eliminarlo?"), input_pass_eliminar], height=100), 
+            actions=[ft.ElevatedButton("ELIMINAR", bgcolor="red", color="white", on_click=confirmar_eliminar)]
+        )
+        
+        dialogo_editar = ft.AlertDialog(
+            title=ft.Text("Editar Producto ✏️"), 
+            content=ft.Column([input_edit_nombre, input_edit_precio, input_pass_edit], height=220), 
+            actions=[ft.ElevatedButton("GUARDAR CAMBIOS", bgcolor="green", color="white", on_click=confirmar_edicion)]
+        )
+        
         page.overlay.extend([dialogo_stock, dialogo_eliminar, dialogo_editar])
 
-        def abrir_stock(cod): codigo_seleccionado[0] = cod; input_pass_stock.value = ""; input_cant_stock.value = ""; dialogo_stock.open = True; page.update()
-        def abrir_eliminar(cod): codigo_seleccionado[0] = cod; input_pass_eliminar.value = ""; dialogo_eliminar.open = True; page.update()
-        def abrir_editar(cod, nom, prec): codigo_seleccionado[0] = cod; input_edit_nombre.value = nom; input_edit_precio.value = str(prec); input_pass_edit.value = ""; dialogo_editar.open = True; page.update()
+        def abrir_stock(cod):
+            codigo_seleccionado[0] = cod
+            input_pass_stock.value = ""
+            input_cant_stock.value = ""
+            dialogo_stock.open = True
+            page.update()
+            
+        def abrir_eliminar(cod):
+            codigo_seleccionado[0] = cod
+            input_pass_eliminar.value = ""
+            dialogo_eliminar.open = True
+            page.update()
+            
+        def abrir_editar(cod, nom, prec):
+            codigo_seleccionado[0] = cod
+            input_edit_nombre.value = nom
+            input_edit_precio.value = str(prec)
+            input_pass_edit.value = ""
+            dialogo_editar.open = True
+            page.update()
 
         txt_codigo = ft.TextField(label="Código", width=150, border_radius=10)
         txt_nombre = ft.TextField(label="Nombre", width=300, border_radius=10)
         txt_precio = ft.TextField(label="Precio", width=100, keyboard_type="number", border_radius=10)
         txt_stock = ft.TextField(label="Stock", width=100, keyboard_type="number", border_radius=10)
         
-        tabla = ft.DataTable(columns=[ft.DataColumn(ft.Text("Código")), ft.DataColumn(ft.Text("Nombre")), ft.DataColumn(ft.Text("Precio")), ft.DataColumn(ft.Text("Stock")), ft.DataColumn(ft.Text("Acciones"))], rows=[])
+        tabla = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("Código")), 
+                ft.DataColumn(ft.Text("Nombre")), 
+                ft.DataColumn(ft.Text("Precio")), 
+                ft.DataColumn(ft.Text("Stock")), 
+                ft.DataColumn(ft.Text("Acciones"))
+            ], 
+            rows=[]
+        )
 
         def cargar():
-            datos = obtener_productos(); tabla.rows.clear()
+            datos = obtener_productos()
+            tabla.rows.clear()
+            
             for p in datos:
-                btn_editar = ft.IconButton(icon="edit", icon_color="blue", tooltip="Editar", on_click=lambda e, c=p[0], n=p[1], pr=p[2]: abrir_editar(c, n, pr))
-                btn_stock = ft.IconButton(icon="add_circle", icon_color="green", tooltip="Sumar Stock", on_click=lambda e, c=p[0]: abrir_stock(c))
-                btn_eliminar = ft.IconButton(icon="delete", icon_color="red", tooltip="Eliminar", on_click=lambda e, c=p[0]: abrir_eliminar(c))
-                tabla.rows.append(ft.DataRow(cells=[ft.DataCell(ft.Text(p[0])), ft.DataCell(ft.Text(p[1])), ft.DataCell(ft.Text(f"${p[2]}")), ft.DataCell(ft.Text(str(p[3]))), ft.DataCell(ft.Row([btn_editar, btn_stock, btn_eliminar]))]))
+                # ✅ REFACTORIZADO: Usar .data en lugar de lambda con parámetros
+                btn_editar = ft.IconButton(
+                    icon="edit", 
+                    icon_color="blue", 
+                    tooltip="Editar",
+                    data={"cod": p[0], "nom": p[1], "prec": p[2]},
+                    on_click=lambda e: abrir_editar(
+                        e.control.data["cod"], 
+                        e.control.data["nom"], 
+                        e.control.data["prec"]
+                    )
+                )
+                
+                btn_stock = ft.IconButton(
+                    icon="add_circle", 
+                    icon_color="green", 
+                    tooltip="Sumar Stock",
+                    data=p[0],
+                    on_click=lambda e: abrir_stock(e.control.data)
+                )
+                
+                btn_eliminar = ft.IconButton(
+                    icon="delete", 
+                    icon_color="red", 
+                    tooltip="Eliminar",
+                    data=p[0],
+                    on_click=lambda e: abrir_eliminar(e.control.data)
+                )
+                
+                tabla.rows.append(
+                    ft.DataRow(cells=[
+                        ft.DataCell(ft.Text(str(p[0]))),  # ✅ str() explícito
+                        ft.DataCell(ft.Text(str(p[1]))), 
+                        ft.DataCell(ft.Text(f"${p[2]}")), 
+                        ft.DataCell(ft.Text(str(p[3]))), 
+                        ft.DataCell(ft.Row([btn_editar, btn_stock, btn_eliminar]))
+                    ])
+                )
             page.update()
 
         def guardar(e):
-            if registrar_producto(txt_codigo.value, txt_nombre.value, float(txt_precio.value or 0), int(txt_stock.value or 0)): page.snack_bar = ft.SnackBar(ft.Text("✅ Producto Creado"), bgcolor="green", open=True); txt_codigo.value=""; txt_nombre.value=""; txt_precio.value=""; txt_stock.value=""; cargar()
-            else: page.snack_bar = ft.SnackBar(ft.Text("⚠️ Código repetido"), bgcolor="orange", open=True); page.update()
+            # ✅ VALIDACIONES COMPLETAS AGREGADAS
+            if not txt_codigo.value.strip():
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("⚠️ El código no puede estar vacío"), 
+                    bgcolor="orange", 
+                    open=True
+                )
+                page.update()
+                return
+            
+            if not txt_nombre.value.strip():
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("⚠️ El nombre no puede estar vacío"), 
+                    bgcolor="orange", 
+                    open=True
+                )
+                page.update()
+                return
+            
+            try:
+                precio = float(txt_precio.value or 0)
+                stock = int(txt_stock.value or 0)
+                
+                if precio < 0 or stock < 0:
+                    raise ValueError("Valores negativos no permitidos")
+                    
+            except ValueError:
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("⚠️ Precio y stock deben ser números válidos"), 
+                    bgcolor="orange", 
+                    open=True
+                )
+                page.update()
+                return
+            
+            if registrar_producto(txt_codigo.value.strip(), txt_nombre.value.strip(), precio, stock):
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("✅ Producto Creado"), 
+                    bgcolor="green", 
+                    open=True
+                )
+                txt_codigo.value = ""
+                txt_nombre.value = ""
+                txt_precio.value = ""
+                txt_stock.value = ""
+                cargar()
+            else:
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("⚠️ Código repetido"), 
+                    bgcolor="orange", 
+                    open=True
+                )
+            page.update()
 
-        page.add(ft.Row([ft.IconButton(icon="arrow_back", on_click=lambda _: mostrar_dashboard(usuario_nombre)), ft.Text("Gestión de Inventario", size=30, weight="bold")]), ft.Divider(), ft.Text("Agregar Nuevo Producto:", size=16, weight="bold"), ft.Row([txt_codigo, txt_nombre, txt_precio, txt_stock, ft.ElevatedButton("GUARDAR", icon="save", on_click=guardar, bgcolor="green", color="white")], wrap=True), ft.Divider(), tabla); cargar()
+        page.add(
+            ft.Row([
+                ft.IconButton(icon="arrow_back", on_click=lambda _: mostrar_dashboard(usuario_nombre)), 
+                ft.Text("Gestión de Inventario", size=30, weight="bold")
+            ]), 
+            ft.Divider(), 
+            ft.Text("Agregar Nuevo Producto:", size=16, weight="bold"), 
+            ft.Row([
+                txt_codigo, 
+                txt_nombre, 
+                txt_precio, 
+                txt_stock, 
+                ft.ElevatedButton("GUARDAR", icon="save", on_click=guardar, bgcolor="green", color="white")
+            ], wrap=True), 
+            ft.Divider(), 
+            tabla
+        )
+        cargar()
 
     # ---------------------------------------------------------
     # PANTALLA 5: REPORTES 
     # ---------------------------------------------------------
     def mostrar_reportes(usuario_nombre):
-        page.clean(); page.overlay.clear()
-        tabla_detalle = ft.DataTable(columns=[ft.DataColumn(ft.Text("Prod")), ft.DataColumn(ft.Text("Cant")), ft.DataColumn(ft.Text("Total"))], rows=[])
-        def cerrar_dialogo(e): dialogo_detalle.open = False; page.update()
-        dialogo_detalle = ft.AlertDialog(title=ft.Text("Detalle del Ticket"), content=ft.Column([tabla_detalle], height=300, scroll="auto"), actions=[ft.TextButton("Cerrar", on_click=cerrar_dialogo)])
+        page.clean()
+        page.overlay.clear()
+        
+        tabla_detalle = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("Prod")), 
+                ft.DataColumn(ft.Text("Cant")), 
+                ft.DataColumn(ft.Text("Total"))
+            ], 
+            rows=[]
+        )
+        
+        def cerrar_dialogo(e):
+            dialogo_detalle.open = False
+            page.update()
+            
+        dialogo_detalle = ft.AlertDialog(
+            title=ft.Text("Detalle del Ticket"), 
+            content=ft.Column([tabla_detalle], height=300, scroll="auto"), 
+            actions=[ft.TextButton("Cerrar", on_click=cerrar_dialogo)]
+        )
         page.overlay.append(dialogo_detalle)
 
         def ver_detalle(id_venta):
-            productos = obtener_detalle_venta(id_venta); tabla_detalle.rows.clear()
-            for p in productos: tabla_detalle.rows.append(ft.DataRow(cells=[ft.DataCell(ft.Text(p[0])), ft.DataCell(ft.Text(str(p[1]))), ft.DataCell(ft.Text(f"${p[3]:.2f}"))]))
-            dialogo_detalle.open = True; page.update()
+            productos = obtener_detalle_venta(id_venta)
+            tabla_detalle.rows.clear()
+            
+            for p in productos:
+                tabla_detalle.rows.append(
+                    ft.DataRow(cells=[
+                        ft.DataCell(ft.Text(str(p[0]))),  # ✅ str() explícito
+                        ft.DataCell(ft.Text(str(p[1]))), 
+                        ft.DataCell(ft.Text(f"${p[3]:.2f}"))
+                    ])
+                )
+            dialogo_detalle.open = True
+            page.update()
 
-        tabla_ventas = ft.DataTable(columns=[ft.DataColumn(ft.Text("ID")), ft.DataColumn(ft.Text("Fecha")), ft.DataColumn(ft.Text("Total")), ft.DataColumn(ft.Text("Ver"))], rows=[])
-        ventas = obtener_ventas(); total_ingresos = 0
+        tabla_ventas = ft.DataTable(
+            columns=[
+                ft.DataColumn(ft.Text("ID")), 
+                ft.DataColumn(ft.Text("Fecha")), 
+                ft.DataColumn(ft.Text("Total")), 
+                ft.DataColumn(ft.Text("Ver"))
+            ], 
+            rows=[]
+        )
+        
+        ventas = obtener_ventas()
+        total_ingresos = 0
+        
         for v in ventas:
             total_ingresos += v[2]
-            tabla_ventas.rows.append(ft.DataRow(cells=[ft.DataCell(ft.Text(str(v[0]))), ft.DataCell(ft.Text(v[1])), ft.DataCell(ft.Text(f"${v[2]:.2f}", color="green", weight="bold")), ft.DataCell(ft.IconButton(icon="visibility", icon_color="blue", on_click=lambda e, x=v[0]: ver_detalle(x)))]))
+            
+            # ✅ REFACTORIZADO: Usar .data
+            btn_ver = ft.IconButton(
+                icon="visibility", 
+                icon_color="blue",
+                data=v[0],
+                on_click=lambda e: ver_detalle(e.control.data)
+            )
+            
+            tabla_ventas.rows.append(
+                ft.DataRow(cells=[
+                    ft.DataCell(ft.Text(str(v[0]))),  # ✅ str() explícito
+                    ft.DataCell(ft.Text(str(v[1]))), 
+                    ft.DataCell(ft.Text(f"${v[2]:.2f}", color="green", weight="bold")), 
+                    ft.DataCell(btn_ver)
+                ])
+            )
         
-        card_total = ft.Container(content=ft.Column([ft.Text("TOTAL INGRESOS", size=15), ft.Text(f"${total_ingresos:.2f}", size=40, weight="bold", color="green")], alignment="center"), padding=20, border=ft.border.all(1, "green"), border_radius=15, bgcolor="#1A2E20")
-        page.add(ft.Row([ft.IconButton(icon="arrow_back", on_click=lambda _: mostrar_dashboard(usuario_nombre)), ft.Text("Reportes Financieros", size=30, weight="bold")]), ft.Divider(), ft.Row([card_total], alignment="center"), ft.Divider(), ft.Column([tabla_ventas], scroll="auto", height=400))
+        card_total = ft.Container(
+            content=ft.Column([
+                ft.Text("TOTAL INGRESOS", size=15), 
+                ft.Text(f"${total_ingresos:.2f}", size=40, weight="bold", color="green")
+            ], alignment="center"), 
+            padding=20, 
+            border=ft.border.all(1, "green"), 
+            border_radius=15, 
+            bgcolor="#1A2E20"
+        )
+        
+        page.add(
+            ft.Row([
+                ft.IconButton(icon="arrow_back", on_click=lambda _: mostrar_dashboard(usuario_nombre)), 
+                ft.Text("Reportes Financieros", size=30, weight="bold")
+            ]), 
+            ft.Divider(), 
+            ft.Row([card_total], alignment="center"), 
+            ft.Divider(), 
+            ft.Column([tabla_ventas], scroll="auto", height=400)
+        )
 
     # ---------------------------------------------------------
     # PANTALLA 2: DASHBOARD 
     # ---------------------------------------------------------
     def mostrar_dashboard(usuario_nombre):
         page.clean()
+        
         def crear_boton_menu(texto, icono, color_fondo, funcion):
-            return ft.Container(content=ft.Column([ft.Icon(name=icono, size=50, color="white"), ft.Text(texto, size=20, weight="bold", color="white")], alignment="center", horizontal_alignment="center"), width=200, height=200, bgcolor=color_fondo, border_radius=20, on_click=funcion, padding=20, ink=True)
-        header = ft.AppBar(title=ft.Text(f"Bienvenido, {usuario_nombre}", weight="bold"), bgcolor="blue", center_title=False, actions=[ft.IconButton(icon="logout", tooltip="Cerrar Sesión", on_click=lambda _: mostrar_login())])
-        contenedor_botones = ft.Row([crear_boton_menu("NUEVA VENTA", "shopping_cart", "green", lambda e: mostrar_ventas(usuario_nombre)), crear_boton_menu("INVENTARIO", "inventory", "orange", lambda e: mostrar_inventario(usuario_nombre)), crear_boton_menu("REPORTES", "assessment", "purple", lambda e: mostrar_reportes(usuario_nombre))], alignment="center", wrap=True)
+            return ft.Container(
+                content=ft.Column([
+                    ft.Icon(name=icono, size=50, color="white"), 
+                    ft.Text(texto, size=20, weight="bold", color="white")
+                ], alignment="center", horizontal_alignment="center"), 
+                width=200, 
+                height=200, 
+                bgcolor=color_fondo, 
+                border_radius=20, 
+                on_click=funcion, 
+                padding=20, 
+                ink=True
+            )
+            
+        header = ft.AppBar(
+            title=ft.Text(f"Bienvenido, {usuario_nombre}", weight="bold"), 
+            bgcolor="blue", 
+            center_title=False, 
+            actions=[ft.IconButton(icon="logout", tooltip="Cerrar Sesión", on_click=lambda _: mostrar_login())]
+        )
+        
+        contenedor_botones = ft.Row([
+            crear_boton_menu("NUEVA VENTA", "shopping_cart", "green", lambda e: mostrar_ventas(usuario_nombre)), 
+            crear_boton_menu("INVENTARIO", "inventory", "orange", lambda e: mostrar_inventario(usuario_nombre)), 
+            crear_boton_menu("REPORTES", "assessment", "purple", lambda e: mostrar_reportes(usuario_nombre))
+        ], alignment="center", wrap=True)
+        
         page.add(header, ft.Divider(height=50, color="transparent"), contenedor_botones)
 
     # ---------------------------------------------------------
     # PANTALLA 1: LOGIN 
     # ---------------------------------------------------------
     def mostrar_login():
-        page.clean(); page.vertical_alignment = "center"; page.horizontal_alignment = "center"
+        page.clean()
+        page.vertical_alignment = "center"
+        page.horizontal_alignment = "center"
+        
         def validar_login(e):
+            # ✅ VALIDACIÓN AGREGADA
+            if not campo_usuario.value.strip() or not campo_password.value.strip():
+                page.snack_bar = ft.SnackBar(
+                    ft.Text("⚠️ Completa todos los campos"), 
+                    bgcolor="orange", 
+                    open=True
+                )
+                page.update()
+                return
+            
             con = crear_conexion()
             if con:
                 cursor = con.cursor()
-                cursor.execute("SELECT * FROM usuarios WHERE usuario = ? AND password = ?", (campo_usuario.value, campo_password.value))
-                res = cursor.fetchone(); con.close()
-                if res: mostrar_dashboard(res[3])
-                else: page.snack_bar = ft.SnackBar(ft.Text("❌ Datos incorrectos"), bgcolor="red", open=True); page.update()
-        campo_usuario = ft.TextField(label="Usuario", width=300, icon="person", border_radius=10)
-        campo_password = ft.TextField(label="Contraseña", width=300, password=True, can_reveal_password=True, icon="key", border_radius=10)
-        boton_ingresar = ft.ElevatedButton(text="INGRESAR", width=300, height=50, on_click=validar_login, style=ft.ButtonStyle(bgcolor="blue", color="white", shape=ft.RoundedRectangleBorder(radius=10)))
-        tarjeta_login = ft.Container(content=ft.Column([ft.Icon(name="lock_person", size=80, color="blue"), ft.Text("Iniciar Sesión", size=30, weight="bold"), ft.Divider(height=20, color="transparent"), campo_usuario, campo_password, ft.Divider(height=20, color="transparent"), boton_ingresar], alignment="center", horizontal_alignment="center"), width=400, height=500, padding=30, border_radius=20, border=ft.border.all(1, "grey"), bgcolor="#1AFFFFFF")
+                cursor.execute(
+                    "SELECT * FROM usuarios WHERE usuario = ? AND password = ?", 
+                    (campo_usuario.value.strip(), campo_password.value)
+                )
+                res = cursor.fetchone()
+                con.close()
+                
+                if res:
+                    mostrar_dashboard(res[3])
+                else:
+                    page.snack_bar = ft.SnackBar(
+                        ft.Text("❌ Datos incorrectos"), 
+                        bgcolor="red", 
+                        open=True
+                    )
+                    page.update()
+                    
+        campo_usuario = ft.TextField(
+            label="Usuario", 
+            width=300, 
+            icon="person", 
+            border_radius=10
+        )
+        
+        campo_password = ft.TextField(
+            label="Contraseña", 
+            width=300, 
+            password=True, 
+            can_reveal_password=True, 
+            icon="key", 
+            border_radius=10
+        )
+        
+        boton_ingresar = ft.ElevatedButton(
+            text="INGRESAR", 
+            width=300, 
+            height=50, 
+            on_click=validar_login, 
+            style=ft.ButtonStyle(
+                bgcolor="blue", 
+                color="white", 
+                shape=ft.RoundedRectangleBorder(radius=10)
+            )
+        )
+        
+        tarjeta_login = ft.Container(
+            content=ft.Column([
+                ft.Icon(name="lock_person", size=80, color="blue"), 
+                ft.Text("Iniciar Sesión", size=30, weight="bold"), 
+                ft.Divider(height=20, color="transparent"), 
+                campo_usuario, 
+                campo_password, 
+                ft.Divider(height=20, color="transparent"), 
+                boton_ingresar
+            ], alignment="center", horizontal_alignment="center"), 
+            width=400, 
+            height=500, 
+            padding=30, 
+            border_radius=20, 
+            border=ft.border.all(1, "grey"), 
+            bgcolor="#1AFFFFFF"
+        )
+        
         page.add(tarjeta_login)
 
     mostrar_login()
