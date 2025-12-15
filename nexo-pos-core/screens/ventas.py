@@ -1,8 +1,8 @@
 """Pantalla de Punto de Venta"""
 import flet as ft
-from data import obtener_productos, buscar_producto, realizar_venta
-from services import ticket_service
-from utils import Colors, Icons, Sizes, Messages
+from data.database import obtener_productos, buscar_producto, realizar_venta
+from services.ticket_service import ticket_service
+from utils.constants import Colors, Icons, Sizes, Messages
 
 class VentasScreen:
     

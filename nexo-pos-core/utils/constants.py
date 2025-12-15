@@ -35,6 +35,9 @@ class Icons:
     DECREMENTAR = "remove_circle_outline"
     CARRITO = "add_shopping_cart"
     ALERTA = "warning"
+    EXITO = "check"
+    ERROR = "error"
+    INFO_ICON = "info"
     LOGIN = "lock_person"
     USUARIO = "person"
     PASSWORD = "key"
@@ -43,7 +46,10 @@ class Sizes:
     TITULO_GRANDE = 30
     TITULO_MEDIO = 20
     TITULO_PEQUEÑO = 16
+    TEXTO_NORMAL = 14
+    TEXTO_PEQUEÑO = 12
     BOTON_ALTO = 50
+    BOTON_ANCHO_NORMAL = 150
     BOTON_ANCHO_GRANDE = 200
     BOTON_ANCHO_MENU = 200
     BOTON_ALTO_MENU = 200
@@ -54,6 +60,7 @@ class Sizes:
     INPUT_LOGIN = 300
     ICONO_GRANDE = 80
     ICONO_MEDIO = 50
+    ICONO_PEQUEÑO = 24
     MODAL_DIALOGO_ALTO = 300
     TABLA_CATALOGO_ALTO = 300
     TABLA_REPORTES_ALTO = 400
@@ -63,9 +70,16 @@ class Messages:
     PRODUCTO_EDITADO = "✅ Producto Editado"
     PRODUCTO_ELIMINADO = "🗑️ Producto Eliminado"
     STOCK_ACTUALIZADO = "✅ Stock Actualizado"
+    VENTA_REGISTRADA = "✅ Venta registrada: ${}"
     DATOS_INCORRECTOS = "❌ Datos incorrectos"
     PRODUCTO_NO_ENCONTRADO = "❌ Producto no encontrado"
     ERROR_GUARDAR_VENTA = "❌ Error al guardar venta"
+    ERROR_EDITAR = "⚠️ Error al editar"
     PASSWORD_INCORRECTA = "❌ Contraseña Incorrecta"
     COMPLETAR_CAMPOS = "⚠️ Completa todos los campos"
     CODIGO_REPETIDO = "⚠️ Código repetido"
+    CAMPO_VACIO = "⚠️ El {} no puede estar vacío"
+    NUMERO_INVALIDO = "⚠️ {} debe ser un número válido"
+    VALOR_NEGATIVO = "⚠️ {} no puede ser negativo"
+    STOCK_INSUFICIENTE = "Stock insuficiente para agregar más '{}'"
+    LIMITE_STOCK = "Límite de stock alcanzado ({} disponibles)"
