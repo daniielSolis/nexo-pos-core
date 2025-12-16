@@ -1,8 +1,9 @@
-"""Pantalla de Inventario"""
+"""Pantalla de Inventario - NEXO POS"""
 import flet as ft
-from data import (obtener_productos, registrar_producto, sumar_stock, 
-                  eliminar_producto, editar_producto, validar_admin)
-from utils import Validators, ValidationError, Colors, Icons, Sizes, Messages
+from data.database import (obtener_productos, registrar_producto, sumar_stock, 
+                            eliminar_producto, editar_producto, validar_admin)
+from utils.validators import Validators, ValidationError
+from utils.constants import Colors, Icons, Sizes, Messages
 
 class InventarioScreen:
     
@@ -12,12 +13,13 @@ class InventarioScreen:
         self.on_volver = on_volver
         self.codigo_seleccionado = [""]
         
-        # Componentes UI
+        # Componentes UI - Formulario Principal
         self.tabla = None
         self.txt_codigo = None
         self.txt_nombre = None
         self.txt_precio = None
         self.txt_stock = None
+        self.txt_stock_minimo = None  # 🆕 NUEVO CAMPO
         
         # Diálogos
         self.dialogo_stock = None
@@ -30,6 +32,7 @@ class InventarioScreen:
         self.input_pass_eliminar = None
         self.input_edit_nombre = None
         self.input_edit_precio = None
+        self.input_edit_stock_minimo = None  # 🆕 NUEVO CAMPO EDICIÓN
         self.input_pass_edit = None
     
     def mostrar(self):
@@ -42,7 +45,9 @@ class InventarioScreen:
         self.cargar()
     
     def _crear_dialogos(self):
-        # Inputs para diálogos
+        """Crea todos los diálogos modales"""
+        
+        # Inputs para diálogo de stock
         self.input_pass_stock = ft.TextField(
             label="Contraseña Admin", 
             password=True, 
@@ -52,26 +57,41 @@ class InventarioScreen:
             label="Cantidad a Agregar", 
             keyboard_type="number"
         )
+        
+        # Inputs para diálogo de eliminación
         self.input_pass_eliminar = ft.TextField(
             label="Contraseña Admin", 
             password=True, 
             can_reveal_password=True
         )
+        
+        # Inputs para diálogo de edición
         self.input_edit_nombre = ft.TextField(label="Nuevo Nombre")
         self.input_edit_precio = ft.TextField(
             label="Nuevo Precio", 
             keyboard_type="number"
         )
+        
+        # 🆕 NUEVO: Campo para stock mínimo en edición
+        self.input_edit_stock_minimo = ft.TextField(
+            label="Stock Mínimo",
+            keyboard_type="number",
+            hint_text="Ej: 5 unidades"
+        )
+        
         self.input_pass_edit = ft.TextField(
             label="Contraseña Admin", 
             password=True, 
             can_reveal_password=True
         )
         
-        # Diálogo Stock
+        # Diálogo de Stock
         self.dialogo_stock = ft.AlertDialog(
             title=ft.Text("Rellenar Stock"),
-            content=ft.Column([self.input_cant_stock, self.input_pass_stock], height=150),
+            content=ft.Column([
+                self.input_cant_stock, 
+                self.input_pass_stock
+            ], height=150),
             actions=[
                 ft.ElevatedButton(
                     "CONFIRMAR",
@@ -82,7 +102,7 @@ class InventarioScreen:
             ]
         )
         
-        # Diálogo Eliminar
+        # Diálogo de Eliminación
         self.dialogo_eliminar = ft.AlertDialog(
             title=ft.Text("⚠️ Eliminar Producto"),
             content=ft.Column([
@@ -99,14 +119,15 @@ class InventarioScreen:
             ]
         )
         
-        # Diálogo Editar
+        # 🆕 Diálogo de Edición - ACTUALIZADO con campo stock_minimo
         self.dialogo_editar = ft.AlertDialog(
             title=ft.Text("Editar Producto ✏️"),
             content=ft.Column([
                 self.input_edit_nombre,
                 self.input_edit_precio,
+                self.input_edit_stock_minimo,  # 🆕 NUEVO CAMPO
                 self.input_pass_edit
-            ], height=220),
+            ], height=280, scroll="auto"),  # Altura aumentada para nuevo campo
             actions=[
                 ft.ElevatedButton(
                     "GUARDAR CAMBIOS",
@@ -124,6 +145,8 @@ class InventarioScreen:
         ])
     
     def _crear_componentes(self):
+        """Crea los componentes de la interfaz principal"""
+        
         self.txt_codigo = ft.TextField(
             label="Código",
             width=Sizes.INPUT_CODIGO,
@@ -141,24 +164,38 @@ class InventarioScreen:
             border_radius=10
         )
         self.txt_stock = ft.TextField(
-            label="Stock",
+            label="Stock Inicial",
             width=Sizes.INPUT_NUMERO,
             keyboard_type="number",
             border_radius=10
         )
         
+        # 🆕 NUEVO: Campo para stock mínimo en formulario principal
+        self.txt_stock_minimo = ft.TextField(
+            label="Stock Mínimo",
+            width=Sizes.INPUT_NUMERO,
+            keyboard_type="number",
+            border_radius=10,
+            hint_text="Ej: 5",
+            value="5"  # Valor por defecto
+        )
+        
+        # 🆕 Tabla actualizada con columna "Mín"
         self.tabla = ft.DataTable(
             columns=[
                 ft.DataColumn(ft.Text("Código")),
                 ft.DataColumn(ft.Text("Nombre")),
                 ft.DataColumn(ft.Text("Precio")),
                 ft.DataColumn(ft.Text("Stock")),
+                ft.DataColumn(ft.Text("Mín")),  # 🆕 NUEVA COLUMNA
                 ft.DataColumn(ft.Text("Acciones"))
             ],
             rows=[]
         )
     
     def _agregar_a_pagina(self):
+        """Agrega los componentes a la página"""
+        
         header = ft.Row([
             ft.IconButton(
                 icon=Icons.BACK,
@@ -184,6 +221,7 @@ class InventarioScreen:
                 self.txt_nombre,
                 self.txt_precio,
                 self.txt_stock,
+                self.txt_stock_minimo,  # 🆕 NUEVO CAMPO EN FILA
                 btn_guardar
             ], wrap=True),
             ft.Divider(),
@@ -191,19 +229,35 @@ class InventarioScreen:
         )
     
     def cargar(self):
+        """Carga los productos desde la base de datos"""
+        
         datos = obtener_productos()
         self.tabla.rows.clear()
         
         for p in datos:
+            # p = (codigo, nombre, precio, stock, stock_minimo)
+            codigo = p[0]
+            nombre = p[1]
+            precio = p[2]
+            stock = p[3]
+            stock_minimo = p[4] if len(p) > 4 else 5  # Seguridad por si no existe
+            
+            # 🆕 Preparar datos para edición (incluyendo stock_minimo)
             btn_editar = ft.IconButton(
                 icon=Icons.EDITAR,
                 icon_color=Colors.PRIMARY,
                 tooltip="Editar",
-                data={"cod": p[0], "nom": p[1], "prec": p[2]},
+                data={
+                    "cod": codigo, 
+                    "nom": nombre, 
+                    "prec": precio, 
+                    "min": stock_minimo  # 🆕 INCLUIR stock_minimo
+                },
                 on_click=lambda e: self._abrir_editar(
                     e.control.data["cod"],
                     e.control.data["nom"],
-                    e.control.data["prec"]
+                    e.control.data["prec"],
+                    e.control.data["min"]  # 🆕 PASAR stock_minimo
                 )
             )
             
@@ -211,7 +265,7 @@ class InventarioScreen:
                 icon=Icons.AGREGAR,
                 icon_color=Colors.SUCCESS,
                 tooltip="Sumar Stock",
-                data=p[0],
+                data=codigo,
                 on_click=lambda e: self._abrir_stock(e.control.data)
             )
             
@@ -219,16 +273,32 @@ class InventarioScreen:
                 icon=Icons.ELIMINAR,
                 icon_color=Colors.DANGER,
                 tooltip="Eliminar",
-                data=p[0],
+                data=codigo,
                 on_click=lambda e: self._abrir_eliminar(e.control.data)
             )
             
+            # 🆕 Determinar color según criticidad del stock
+            if stock == 0:
+                color_stock = Colors.DANGER
+                peso_stock = "bold"
+            elif stock <= stock_minimo:
+                color_stock = Colors.WARNING
+                peso_stock = "bold"
+            else:
+                color_stock = None
+                peso_stock = None
+            
             self.tabla.rows.append(
                 ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(str(p[0]))),
-                    ft.DataCell(ft.Text(str(p[1]))),
-                    ft.DataCell(ft.Text(f"${p[2]}")),
-                    ft.DataCell(ft.Text(str(p[3]))),
+                    ft.DataCell(ft.Text(str(codigo))),
+                    ft.DataCell(ft.Text(str(nombre))),
+                    ft.DataCell(ft.Text(f"${precio}")),
+                    ft.DataCell(ft.Text(
+                        str(stock), 
+                        color=color_stock, 
+                        weight=peso_stock
+                    )),
+                    ft.DataCell(ft.Text(str(stock_minimo), size=12)),  # 🆕 NUEVA CELDA
                     ft.DataCell(ft.Row([btn_editar, btn_stock, btn_eliminar]))
                 ])
             )
@@ -236,18 +306,29 @@ class InventarioScreen:
         self.page.update()
     
     def _guardar(self, e):
+        """Guarda un nuevo producto"""
+        
         try:
-            datos = Validators.validar_campo_vacio(self.txt_codigo.value, "Código")
+            codigo = Validators.validar_campo_vacio(self.txt_codigo.value, "Código")
             nombre = Validators.validar_campo_vacio(self.txt_nombre.value, "Nombre")
             precio = Validators.validar_numero_positivo(self.txt_precio.value, "Precio")
             stock = Validators.validar_entero_positivo(self.txt_stock.value, "Stock")
             
-            if registrar_producto(datos, nombre, precio, stock):
+            # 🆕 Validar stock mínimo
+            stock_minimo = Validators.validar_entero_positivo(
+                self.txt_stock_minimo.value or "5", 
+                "Stock Mínimo"
+            )
+            
+            # 🆕 Pasar stock_minimo a la función de base de datos
+            if registrar_producto(codigo, nombre, precio, stock, stock_minimo):
                 self._mostrar_exito(Messages.PRODUCTO_CREADO)
+                # Limpiar campos
                 self.txt_codigo.value = ""
                 self.txt_nombre.value = ""
                 self.txt_precio.value = ""
                 self.txt_stock.value = ""
+                self.txt_stock_minimo.value = "5"
                 self.cargar()
             else:
                 self._mostrar_error(Messages.CODIGO_REPETIDO)
@@ -255,6 +336,7 @@ class InventarioScreen:
             self._mostrar_error(str(ve))
     
     def _abrir_stock(self, cod):
+        """Abre diálogo para agregar stock"""
         self.codigo_seleccionado[0] = cod
         self.input_pass_stock.value = ""
         self.input_cant_stock.value = ""
@@ -262,6 +344,7 @@ class InventarioScreen:
         self.page.update()
     
     def _confirmar_stock(self, e):
+        """Confirma y ejecuta la adición de stock"""
         try:
             cantidad = Validators.validar_entero_positivo(
                 self.input_cant_stock.value,
@@ -281,12 +364,14 @@ class InventarioScreen:
             self._mostrar_error(str(ve))
     
     def _abrir_eliminar(self, cod):
+        """Abre diálogo de eliminación"""
         self.codigo_seleccionado[0] = cod
         self.input_pass_eliminar.value = ""
         self.dialogo_eliminar.open = True
         self.page.update()
     
     def _confirmar_eliminar(self, e):
+        """Confirma y ejecuta la eliminación"""
         if validar_admin(self.input_pass_eliminar.value):
             eliminar_producto(self.codigo_seleccionado[0])
             self._mostrar_exito(Messages.PRODUCTO_ELIMINADO)
@@ -295,15 +380,18 @@ class InventarioScreen:
         else:
             self._mostrar_error(Messages.PASSWORD_INCORRECTA)
     
-    def _abrir_editar(self, cod, nom, prec):
+    def _abrir_editar(self, cod, nom, prec, stock_min):
+        """🆕 Abre diálogo de edición (ahora recibe stock_minimo)"""
         self.codigo_seleccionado[0] = cod
         self.input_edit_nombre.value = nom
         self.input_edit_precio.value = str(prec)
+        self.input_edit_stock_minimo.value = str(stock_min)  # 🆕 CARGAR VALOR ACTUAL
         self.input_pass_edit.value = ""
         self.dialogo_editar.open = True
         self.page.update()
     
     def _confirmar_edicion(self, e):
+        """🆕 Confirma y ejecuta la edición (ahora incluye stock_minimo)"""
         try:
             nombre = Validators.validar_campo_vacio(
                 self.input_edit_nombre.value,
@@ -314,8 +402,15 @@ class InventarioScreen:
                 "Precio"
             )
             
+            # 🆕 Validar stock mínimo en edición
+            stock_minimo = Validators.validar_entero_positivo(
+                self.input_edit_stock_minimo.value or "5",
+                "Stock Mínimo"
+            )
+            
             if validar_admin(self.input_pass_edit.value):
-                if editar_producto(self.codigo_seleccionado[0], nombre, precio):
+                # 🆕 Pasar stock_minimo a la función de edición
+                if editar_producto(self.codigo_seleccionado[0], nombre, precio, stock_minimo):
                     self._mostrar_exito(Messages.PRODUCTO_EDITADO)
                     self._cerrar_dialogos(None)
                     self.cargar()
@@ -327,12 +422,14 @@ class InventarioScreen:
             self._mostrar_error(str(ve))
     
     def _cerrar_dialogos(self, e):
+        """Cierra todos los diálogos"""
         self.dialogo_stock.open = False
         self.dialogo_eliminar.open = False
         self.dialogo_editar.open = False
         self.page.update()
     
     def _mostrar_error(self, mensaje: str):
+        """Muestra mensaje de error"""
         self.page.snack_bar = ft.SnackBar(
             ft.Text(mensaje),
             bgcolor=Colors.DANGER,
@@ -341,6 +438,7 @@ class InventarioScreen:
         self.page.update()
     
     def _mostrar_exito(self, mensaje: str):
+        """Muestra mensaje de éxito"""
         self.page.snack_bar = ft.SnackBar(
             ft.Text(mensaje),
             bgcolor=Colors.SUCCESS,
