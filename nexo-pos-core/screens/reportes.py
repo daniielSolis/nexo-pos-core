@@ -132,11 +132,16 @@ class ReportesScreen:
             bgcolor=Colors.BACKGROUND_CARD
         )
         
+        # 🔧 ARREGLADO: Agregar scroll vertical con altura fija
         return ft.Column([
             ft.Row([card_total], alignment="center"),
             ft.Divider(),
-            ft.Column([tabla_ventas], scroll="auto", height=350)
-        ])
+            ft.Container(
+                content=ft.Column([tabla_ventas], scroll=ft.ScrollMode.AUTO),
+                alignment=ft.alignment.center,
+                height=400  # 🆕 Altura fija para activar scroll
+            )
+        ], horizontal_alignment="center")
     
     def _crear_tab_reabastecimiento(self):
         """🆕 NUEVA PESTAÑA: Productos que necesitan reabastecimiento"""
@@ -283,8 +288,9 @@ class ReportesScreen:
                     )
                 ], alignment="center"),
                 ft.Container(
-                    content=tabla_reabasto,
-                    alignment=ft.alignment.center
+                    content=ft.Column([tabla_reabasto], scroll=ft.ScrollMode.AUTO),
+                    alignment=ft.alignment.center,
+                    height=320  # Altura fija para scroll
                 )
             ], horizontal_alignment="center")
         
@@ -296,14 +302,24 @@ class ReportesScreen:
         productos = obtener_detalle_venta(id_venta)
         self.tabla_detalle.rows.clear()
         
-        for p in productos:
+        # 🔧 ARREGLADO: Verificar si hay productos
+        if not productos:
             self.tabla_detalle.rows.append(
                 ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(str(p[0]))),
-                    ft.DataCell(ft.Text(str(p[1]))),
-                    ft.DataCell(ft.Text(f"${p[3]:.2f}"))
+                    ft.DataCell(ft.Text("Sin datos", color=Colors.TEXT_SECONDARY)),
+                    ft.DataCell(ft.Text("-")),
+                    ft.DataCell(ft.Text("-"))
                 ])
             )
+        else:
+            for p in productos:
+                self.tabla_detalle.rows.append(
+                    ft.DataRow(cells=[
+                        ft.DataCell(ft.Text(str(p[0]))),
+                        ft.DataCell(ft.Text(str(p[1]))),
+                        ft.DataCell(ft.Text(f"${p[3]:.2f}"))
+                    ])
+                )
         
         self.dialogo_detalle.open = True
         self.page.update()
